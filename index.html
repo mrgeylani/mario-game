@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <!-- MOBİL UYUMLULUK İÇİN VIEWPORT EKLENDİ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>İyi ki Sen Hacer ❤️</title>
+    <style>
+        /* ORİJİNAL CSS AYNEN KORUNDU, SADECE BAZI BİRİMLER EKLENDİ (font-size'lar responsive yapıldı) */
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            overflow:hidden;
+            background:#87CEEB;
+            font-family:Arial;
+        }
+        #viewport{width:100vw;height:100vh;position:relative}
+        #world{position:absolute;width:6500px;height:100%}
+        #ground{
+            position:absolute;
+            bottom:0;
+            width:6500px;
+            height:120px;
+            background:#2ecc71;
+        }
+        #mario{
+            position:absolute;
+            bottom:120px;
+            left:120px;
+            width:80px;
+            z-index:10;
+            transition:bottom .25s;
+        }
+        .box{
+            position:absolute;
+            bottom:300px;
+            width:60px;
+        }
+        /* 🌱 ÇİM BLOĞU ENGEL */
+        .obstacle{
+            position:absolute;
+            bottom:120px;
+            width:70px;
+            height:70px;
+            background: linear-gradient( to bottom, #4CAF50 0%, #4CAF50 25%, #8B4513 25%, #8B4513 100% );
+            border:2px solid #5a3a1a;
+            border-radius:4px;
+        }
+        .hit{transform:scale(1.3) rotate(10deg);filter:brightness(1.6)}
+        .boss{
+            position:absolute;
+            bottom:120px;
+            width:140px;
+        }
+        #message{
+            position:absolute;
+            top:130px;
+            width:100%;
+            text-align:center;
+            font-size:clamp(24px, 6vw, 40px); /* responsive */
+            color:white;
+            opacity:0;
+            transform:translateY(20px) scale(.9);
+            transition:.5s;
+            text-shadow:2px 2px 6px black;
+            z-index:20;
+        }
+        #message.show{
+            opacity:1;
+            transform:translateY(0) scale(1);
+        }
+        #countdown{
+            position:absolute;
+            top:45%;
+            width:100%;
+            text-align:center;
+            font-size:clamp(32px, 8vw, 60px); /* responsive */
+            color:white;
+            text-shadow:3px 3px 8px black;
+            z-index:30;
+        }
+        .heart{
+            position:fixed; /* fixed yapıldı ki viewport'a göre düşsün */
+            top:-50px;
+            font-size:clamp(20px, 5vw, 40px);
+            animation:fall 3s linear infinite;
+            z-index:100;
+        }
+        @keyframes fall{to{transform:translateY(110vh)}}
+        .explosion{
+            position:absolute;
+            width:160px;
+            height:160px;
+            background:radial-gradient(circle,yellow,red);
+            border-radius:50%;
+            animation:boom .6s ease-out forwards;
+        }
+        @keyframes boom{
+            from{transform:scale(.2);opacity:1}
+            to{transform:scale(2);opacity:0}
+        }
+    </style>
+</head>
+<body>
+<div id="viewport">
+    <div id="message"></div>
+    <div id="countdown"></div>
+    <img id="mario" src="mario.png" alt="mario">
+    <div id="world">
+        <div id="ground"></div>
+    </div>
+</div>
+<!-- Ses dosyaları (orijinal isimler) -->
+<audio id="jump" src="jump.wav"></audio>
+<audio id="coin" src="coin.wav"></audio>
+<audio id="boom" src="explosion.wav"></audio>
+
+<script>
+    // ORİJİNAL JAVASCRİPT AYNEN KORUNDU, SADECE KÜÇÜK BİR DÜZELTME: heart'ları body'e eklerken position:fixed kullanıldığı için sorun yok
+    const world=document.getElementById("world");
+    const mario=document.getElementById("mario");
+    const message=document.getElementById("message");
+    const countdown=document.getElementById("countdown");
+    const jump=document.getElementById("jump");
+    const coin=document.getElementById("coin");
+    const boom=document.getElementById("boom");
+    const ground=document.getElementById("ground");
+    let cameraX=0;
+    let gamePaused=true;
+
+    /* 🎵 ARKA PLAN MÜZİĞİ */
+    const music=new Audio("https://cdn.pixabay.com/audio/2023/02/28/audio_0f4d1bbfe2.mp3");
+    music.loop=true;
+    music.volume=0.5;
+
+    const texts=[
+        "Seni ilk gördüğüm an kalbim durdu ❤️",
+        "Gülüşün hayatıma bahar gibi geldi 🌸",
+        "Yanımdayken dünya daha güzel 💫",
+        "Kalbim seni seçti, hep seni 💖",
+        "İyi ki benimlesin, iyi ki varsın 💕"
+    ];
+
+    const timeline=texts.map((t,i)=>({x:800+i*700,text:t}));
+
+    timeline.forEach(t=>{
+        const b=document.createElement("img");
+        b.src="gold box.png";
+        b.className="box";
+        b.style.left=t.x+"px";
+        world.appendChild(b);
+        t.el=b;
+    });
+
+    let obstacles=[];
+
+    /* ❤️ BOSS KALP */
+    const boss=document.createElement("img");
+    boss.src="heart.png";
+    boss.className="boss";
+    boss.style.left="4200px";
+    world.appendChild(boss);
+
+    function marioJump(){
+        jump.currentTime=0;
+        jump.play();
+        mario.style.bottom="260px";
+        setTimeout(()=>mario.style.bottom="120px",300);
+    }
+
+    function spawnObstacle(x){
+        const o=document.createElement("div");
+        o.className="obstacle";
+        o.style.left=(x+220)+"px";
+        world.appendChild(o);
+        obstacles.push(o);
+    }
+
+    function spawnHearts(){
+        for(let i=0;i<50;i++){
+            const h=document.createElement("div");
+            h.className="heart";
+            h.innerHTML="❤️";
+            h.style.left=Math.random()*100+"vw";
+            h.style.animationDelay=Math.random()*2+"s";
+            document.body.appendChild(h);
+        }
+    }
+
+    function explode(x){
+        const e=document.createElement("div");
+        e.className="explosion";
+        e.style.left=x+"px";
+        e.style.top="200px";
+        world.appendChild(e);
+        setTimeout(()=>e.remove(),600);
+    }
+
+    /* ⏳ GERİ SAYIM */
+    let count=3;
+    countdown.innerText="Aşk parkuru için Son 3 Saniye";
+    const timer=setInterval(()=>{
+        count--;
+        if(count>0){
+            countdown.innerText=`Aşk parkuru için Son ${count} Saniye`;
+        }else{
+            countdown.innerText="";
+            gamePaused=false;
+            music.play();
+            clearInterval(timer);
+        }
+    },1000);
+
+    /* 🎬 ANA AKIŞ */
+    function loop(){
+        if(!gamePaused){
+            cameraX+=3;
+            world.style.transform=`translateX(-${cameraX}px)`;
+
+            timeline.forEach(t=>{
+                if(!t.done && cameraX>t.x-200){
+                    marioJump();
+                    coin.currentTime=0;
+                    coin.play();
+                    t.el.classList.add("hit");
+                    setTimeout(()=>t.el.remove(),150);
+                    message.innerText=t.text;
+                    message.classList.add("show");
+                    setTimeout(()=>message.classList.remove("show"),2500);
+                    spawnObstacle(t.x);
+                    t.done=true;
+                }
+            });
+
+            obstacles.forEach(o=>{
+                if(!o.done && cameraX>parseInt(o.style.left)-200){
+                    marioJump();
+                    o.done=true;
+                    setTimeout(()=>o.remove(),400);
+                }
+            });
+
+            /* 🔥 BOSS SAHNESİ */
+            if(cameraX>4000 && !boss.done){
+                gamePaused=true;
+                document.body.style.background="#7b0000";
+                ground.style.background="#8B4513";
+                marioJump();
+                boom.play();
+                explode(4200);
+                boss.remove();
+                message.innerText="İYİ Kİ SEN HACER ❤️";
+                message.classList.add("show");
+                spawnHearts();
+                boss.done=true;
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
